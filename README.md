@@ -12,7 +12,7 @@ No app to install, no password, and the scanner needs no account at all.
 
 1. **Owner signs up with an email address.** We email a sign-in link. There is no password.
 2. **Each car gets a random code**, such as `Z4A7WM5K`, printed as a QR code. The code contains nothing about the owner.
-3. **A scanner picks a ready-made message** and can add a short note. We email it to the owner.
+3. **A scanner picks a ready-made message** and can add a short note and one photo. We email it to the owner, with the photo attached.
 4. **The owner taps a ready-made reply.** It appears on the page the scanner still has open.
 
 ## Privacy and abuse protection
@@ -22,6 +22,7 @@ No app to install, no password, and the scanner needs no account at all.
 - Devices are told apart by a scrambled fingerprint, so no IP addresses are stored.
 - One device can send 3 messages an hour to a car, and a car receives at most 10 an hour.
 - Links are not allowed in notes, which blocks the obvious phishing trick.
+- Photos must be real pictures (JPEG, PNG, WebP or GIF, up to 8 MB). Each one is shrunk and re-saved before sending, which removes hidden details such as GPS location. Photos are never stored on the site.
 - The owner can report a message (which blocks that device) or pause the sticker, straight from the email.
 
 ## Run it on your computer

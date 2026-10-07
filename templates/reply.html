@@ -6,6 +6,7 @@
 <div class="card">
   <p><strong>{{ REASONS[m.reason] }}</strong></p>
   {% if m.note %}<p class="note">“{{ m.note }}”</p>{% endif %}
+  {% if m.photo %}<p class="small">A photo came with this message. It is attached to the email we sent you.</p>{% endif %}
   <p class="small">Sent {{ m.created_at|when }}</p>
 </div>
 

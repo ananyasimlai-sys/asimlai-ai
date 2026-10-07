@@ -2,3 +2,4 @@ Flask>=3.0
 segno>=1.6
 gunicorn>=22.0
 python-dotenv>=1.0
+Pillow>=10.0
