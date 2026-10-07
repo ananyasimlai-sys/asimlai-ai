@@ -9,7 +9,6 @@ One file on purpose. The whole product is four ideas:
 
 import hashlib
 import hmac
-import io
 import os
 import re
 import secrets
@@ -24,7 +23,6 @@ from functools import wraps
 from pathlib import Path
 
 import segno
-from PIL import Image, ImageOps
 from flask import (
     Flask,
     abort,
@@ -66,14 +64,11 @@ LINK_RE = re.compile(r"https?://|www\.", re.I)
 LOGIN_LINK_MINUTES = 30
 REPLY_LINK_DAYS = 7
 MAX_NOTE = 280
-MAX_PHOTO_BYTES = 8 * 1024 * 1024  # the largest photo a scanner can attach
-MAX_PHOTO_PIXELS = 50_000_000
-PHOTO_LONGEST_SIDE = 1600  # photos are shrunk to this before being emailed
 MAX_CARS = 5
 MAX_PER_SENDER_PER_HOUR = 3
 MAX_PER_CAR_PER_HOUR = 10
 
-VERSION = "7"  # shown at /status, so you can tell which version of the code is live
+VERSION = "8"  # shown at /status, so you can tell which version of the code is live
 STARTED = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")  # when this server copy started
 SERVER_ID = secrets.token_hex(3)  # differs between server copies, to spot when more than one is running
 
@@ -101,7 +96,6 @@ CREATE TABLE IF NOT EXISTS messages (
     reply TEXT,
     replied_at TEXT,
     reported INTEGER NOT NULL DEFAULT 0,
-    photo INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS login_requests (
@@ -196,40 +190,10 @@ def notice(title, body, status=200):
     return render_template("notice.html", title=title, body=body), status
 
 
-def prepare_photo(stream):
-    """Checks an uploaded picture and returns a clean, smaller JPEG copy of it.
-
-    Re-saving the picture proves it really is an image, shrinks it so the email stays small,
-    and drops hidden details such as the phone model and GPS location.
-    Raises ValueError with a message for the visitor if the picture can't be used.
-    """
-    data = stream.read(MAX_PHOTO_BYTES + 1)
-    if len(data) > MAX_PHOTO_BYTES:
-        raise ValueError("That picture is too large. The limit is 8 MB.")
-    try:
-        picture = Image.open(io.BytesIO(data))
-        if picture.format not in ("JPEG", "MPO", "PNG", "WEBP", "GIF"):
-            raise ValueError("unsupported format")
-        if picture.width * picture.height > MAX_PHOTO_PIXELS:
-            raise ValueError("too many pixels")
-        picture = ImageOps.exif_transpose(picture).convert("RGB")  # turn it the right way up
-        picture.thumbnail((PHOTO_LONGEST_SIDE, PHOTO_LONGEST_SIDE))
-        clean = io.BytesIO()
-        picture.save(clean, "JPEG", quality=82)
-        return clean.getvalue()
-    except Exception:
-        raise ValueError("We couldn't read that picture. Please try a JPEG or PNG photo.") from None
-
-
-def send_email(recipient, subject, body, photo=None):
-    """Sends an email, or in test mode saves it so it can be read at /dev/outbox.
-
-    `photo` is optional JPEG data to attach. It is never saved on the server.
-    """
+def send_email(recipient, subject, body):
+    """Sends an email, or in test mode saves it so it can be read at /dev/outbox."""
     config = current_app.config
     if config["DEV_OUTBOX"]:
-        if photo:
-            body += f"\n\n[Photo attached: photo.jpg, {len(photo) // 1024 or 1} KB. Not kept in test mode.]"
         db = get_db()
         db.execute(
             "INSERT INTO outbox (recipient, subject, body, created_at) VALUES (?, ?, ?, ?)",
@@ -242,8 +206,6 @@ def send_email(recipient, subject, body, photo=None):
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(body)
-    if photo:
-        message.add_attachment(photo, maintype="image", subtype="jpeg", filename="photo.jpg")
     try:
         if config["SMTP_PORT"] == 465:
             server = smtplib.SMTP_SSL(config["SMTP_HOST"], 465, timeout=15)
@@ -313,7 +275,6 @@ def create_app(test_config=None):
         MAIL_FROM=env("MAIL_FROM", "CarNote <no-reply@localhost>"),
         SECRET_KEY=env("SECRET_KEY", ""),
         SESSION_COOKIE_SAMESITE="Lax",
-        MAX_CONTENT_LENGTH=MAX_PHOTO_BYTES + 2 * 1024 * 1024,  # refuse anything bigger outright
     )
     app.config.update(test_config or {})
     if not app.config["SECRET_KEY"]:
@@ -343,23 +304,18 @@ def create_app(test_config=None):
             pass  # no backup yet: this is the first run
         app.config.update(DATABASE=working, DURABLE_COPY=durable)
 
-    def prepare_database():
+    try:
         with sqlite3.connect(app.config["DATABASE"]) as db:
             db.executescript(SCHEMA)
             db.execute("SELECT COUNT(*) FROM owners").fetchone()
-            # Databases made before photos existed need the new column added.
-            if "photo" not in [column[1] for column in db.execute("PRAGMA table_info(messages)")]:
-                db.execute("ALTER TABLE messages ADD COLUMN photo INTEGER NOT NULL DEFAULT 0")
-
-    try:
-        prepare_database()
     except sqlite3.DatabaseError:
         if not app.config["DURABLE_COPY"]:
             raise
         # The backup we restored is damaged. Set it aside and start clean rather than crash.
         app.logger.error("Restored database was unreadable; starting with an empty one")
         os.replace(app.config["DATABASE"], app.config["DATABASE"] + ".damaged")
-        prepare_database()
+        with sqlite3.connect(app.config["DATABASE"]) as db:
+            db.executescript(SCHEMA)
 
     @app.teardown_appcontext
     def close_db(_error):
@@ -530,7 +486,7 @@ def create_app(test_config=None):
 
     @app.get("/c/<code>")
     def scan(code):
-        return render_template("scan.html", car=find_car(code), max_note=MAX_NOTE, max_photo=MAX_PHOTO_BYTES)
+        return render_template("scan.html", car=find_car(code), max_note=MAX_NOTE)
 
     @app.post("/c/<code>")
     def send_message(code):
@@ -570,20 +526,10 @@ def create_app(test_config=None):
                 429,
             )
 
-        photo = None
-        upload = request.files.get("photo")
-        if upload and upload.filename:
-            try:
-                photo = prepare_photo(upload.stream)
-            except ValueError as problem:
-                flash(str(problem))
-                return back
-
         thread = secrets.token_urlsafe(18)
         cursor = db.execute(
-            "INSERT INTO messages (car_id, thread, sender, reason, note, photo, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (car["id"], thread, sender, reason, note, 1 if photo else 0, stamp()),
+            "INSERT INTO messages (car_id, thread, sender, reason, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (car["id"], thread, sender, reason, note, stamp()),
         )
         db.commit()
 
@@ -595,10 +541,8 @@ def create_app(test_config=None):
             f"{car['nickname']}: {REASONS[reason]}",
             f"Someone scanned the sticker on {car['nickname']} and sent you this:\n\n"
             f"    {REASONS[reason]}{quoted_note}\n\n"
-            + ("They attached a photo, which is included with this email.\n\n" if photo else "")
-            + f"Reply with one tap. They will not see your name or email address:\n{reply_link}\n\n"
+            f"Reply with one tap. They will not see your name or email address:\n{reply_link}\n\n"
             "The same link lets you report this message or pause your sticker.",
-            photo=photo,
         )
         return redirect(url_for("thread", thread=thread))
 
@@ -677,10 +621,6 @@ def create_app(test_config=None):
             last_backup=app.config["LAST_BACKUP"] if app.config["DURABLE_COPY"] else "not used",
             email="test mode" if app.config["DEV_OUTBOX"] else "sending",
         )
-
-    @app.errorhandler(413)
-    def too_large(_error):
-        return notice("That picture is too large", "The limit is 8 MB. Go back and choose a smaller one.", 413)
 
     @app.errorhandler(404)
     def not_found(error):

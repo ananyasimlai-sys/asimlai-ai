@@ -1,6 +1,5 @@
 """Tests that walk through the product the way real people would use it."""
 
-import io
 import re
 import sqlite3
 import sys
@@ -202,7 +201,7 @@ def test_site_keeps_working_if_the_backup_location_fails(tmp_path):
 
 def test_status_page_reports_how_the_site_is_running(tmp_path, app):
     report = app.test_client().get("/status").json
-    assert (report["version"], report["storage"], report["email"], report["cars"]) == ("7", "direct file", "test mode", 0)
+    assert (report["version"], report["storage"], report["email"], report["cars"]) == ("8", "direct file", "test mode", 0)
     (tmp_path / "bucket").mkdir()
     hosted = hosted_app(tmp_path)
     sign_up(hosted)
@@ -232,72 +231,3 @@ def test_stale_sign_in_after_a_data_reset_is_sent_home_not_stuck(app):
     assert "Get my free sticker" in owner.get("/", follow_redirects=True).text
     _other, other_code = sign_up(app, "other@example.com")  # everyone else carries on unaffected
     assert app.test_client().get(f"/c/{other_code}").status_code == 200
-
-
-def picture(kind="JPEG", size=(3000, 2000)):
-    from PIL import Image
-
-    data = io.BytesIO()
-    Image.new("RGB", size, "teal").save(data, kind)
-    data.seek(0)
-    return data
-
-
-def send_with_photo(client, code, upload, name="IMG_0001.jpg"):
-    return client.post(
-        f"/c/{code}",
-        data={"csrf": csrf(client), "reason": "damage", "note": "Scratch on the door", "photo": (upload, name)},
-        content_type="multipart/form-data",
-    )
-
-
-def test_scanner_can_attach_a_photo(app):
-    owner, code = sign_up(app)
-    scanner = app.test_client()
-    assert 'type="file"' in scanner.get(f"/c/{code}").text
-    sent = send_with_photo(scanner, code, picture())
-    assert "Your photo was sent" in scanner.get(sent.headers["Location"]).text
-    email = emails(app)[-1]
-    assert "They attached a photo" in email["body"] and "Photo attached: photo.jpg" in email["body"]
-    assert "Photo in your email" in owner.get("/dashboard").text
-    assert "A photo came with this message" in app.test_client().get(link_in(email)).text
-
-
-def test_photo_is_shrunk_and_stripped_before_sending():
-    from PIL import Image
-
-    from app import prepare_photo
-
-    original = picture(size=(4000, 3000))
-    clean = Image.open(io.BytesIO(prepare_photo(original)))
-    assert clean.format == "JPEG" and max(clean.size) == 1600 and not clean.getexif()
-
-
-def test_things_that_are_not_pictures_are_refused(app):
-    _owner, code = sign_up(app)
-    before = len(emails(app))
-    for fake in (io.BytesIO(b"MZ this is a program, not a picture"), io.BytesIO(b"%PDF-1.7 a document")):
-        assert send_with_photo(app.test_client(), code, fake, "photo.jpg").status_code == 302
-    assert len(emails(app)) == before
-
-
-def test_oversized_upload_is_refused(app):
-    _owner, code = sign_up(app)
-    huge = io.BytesIO(b"x" * (11 * 1024 * 1024))
-    assert send_with_photo(app.test_client(), code, huge).status_code == 413
-
-
-def test_message_without_a_photo_still_works(app):
-    _owner, code = sign_up(app)
-    assert send(app.test_client(), code).status_code == 302
-    assert "Photo attached" not in emails(app)[-1]["body"]
-
-
-def test_older_database_gains_the_photo_column(tmp_path):
-    path = tmp_path / "old.sqlite3"
-    first = create_app({"TESTING": True, "DATABASE": str(path), "SECRET_KEY": "x", "SMTP_HOST": ""})
-    with sqlite3.connect(path) as db:
-        db.execute("ALTER TABLE messages DROP COLUMN photo")  # how it looked before this feature
-    again = create_app({"TESTING": True, "DATABASE": str(path), "SECRET_KEY": "x", "SMTP_HOST": "", "BASE_URL": "http://localhost"})
-    _owner, code = sign_up(again)
-    assert send(again.test_client(), code).status_code == 302

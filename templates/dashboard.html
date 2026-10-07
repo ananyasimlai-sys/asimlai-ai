@@ -28,7 +28,6 @@
       <strong>{{ REASONS[m.reason] }}</strong>
       {% if m.note %}<span class="note">“{{ m.note }}”</span>{% endif %}
       <span class="small">{{ m.created_at|when }}
-        {% if m.photo %}· Photo in your email{% endif %}
         {% if m.reported %}· Reported{% elif m.reply %}· You replied: {{ REPLIES[m.reply] }}{% endif %}
       </span>
       {% if not m.reply and not m.reported %}<a href="{{ url_for('reply', token=m.token) }}">Reply</a>{% endif %}

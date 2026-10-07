@@ -7,7 +7,6 @@
   <p class="small">You said</p>
   <p><strong>{{ REASONS[m.reason] }}</strong></p>
   {% if m.note %}<p class="note">“{{ m.note }}”</p>{% endif %}
-  {% if m.photo %}<p class="small">Your photo was sent with it.</p>{% endif %}
 </div>
 
 <div class="card reply-box {{ 'got' if m.reply }}" aria-live="polite">
