@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Test emails · {{ app_name }}{% endblock %}
+{% block main %}
+<h1>Test emails</h1>
+<p class="small">No mail server is set up, so emails land here instead of being sent. This page disappears once one is configured.</p>
+{% for email in emails %}
+<div class="card">
+  <p class="small">To {{ email.recipient }} · {{ email.created_at|when }}</p>
+  <p><strong>{{ email.subject }}</strong></p>
+  <p class="pre">{{ email.body|urlize }}</p>
+</div>
+{% else %}
+<p>No emails yet.</p>
+{% endfor %}
+{% endblock %}

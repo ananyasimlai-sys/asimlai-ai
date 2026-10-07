@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="bar noprint">
+    <a class="brand" href="{{ url_for('home') }}">{{ app_name }}</a>
+    {% if session.owner_id %}
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="link">Sign out</button>
+    </form>
+    {% endif %}
+  </header>
+  {% if dev_outbox %}
+  <p class="dev noprint">Test mode: emails are saved, not sent. <a href="{{ url_for('outbox') }}">Read them here</a>.</p>
+  {% endif %}
+  <main>
+    {% for message in get_flashed_messages() %}
+    <p class="flash" role="alert">{{ message }}</p>
+    {% endfor %}
+    {% block main %}{% endblock %}
+  </main>
+</body>
+</html>

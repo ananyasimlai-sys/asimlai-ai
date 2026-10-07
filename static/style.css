@@ -1,0 +1,117 @@
+:root {
+  --ink: #16202a;
+  --muted: #5b6875;
+  --line: #d9dfe6;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --accent: #0b6e4f;
+  --accent-soft: #e3f3ec;
+  --danger: #b3261e;
+  --warn-bg: #fff4d6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+main { max-width: 34rem; margin: 0 auto; padding: 1rem 1rem 3rem; }
+
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 1rem 0 .5rem; }
+h2 { font-size: 1.2rem; margin: 0; }
+h3 { font-size: 1rem; margin: 1.25rem 0 .5rem; }
+p { margin: .5rem 0; }
+a { color: var(--accent); }
+
+.lead { color: var(--muted); margin-bottom: 1.25rem; }
+.small { font-size: .875rem; color: var(--muted); }
+.note { font-style: italic; overflow-wrap: anywhere; }
+.pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .75rem 1rem; background: var(--card); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; color: var(--ink); text-decoration: none; }
+.dev { margin: 0; padding: .5rem 1rem; background: var(--warn-bg); font-size: .875rem; text-align: center; }
+.flash { padding: .75rem 1rem; background: var(--warn-bg); border-radius: .5rem; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: .75rem;
+  padding: 1rem; margin: 1rem 0;
+}
+.card h1 { margin-top: 0; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+
+label, legend { display: block; font-weight: 600; margin: 1rem 0 .4rem; padding: 0; }
+fieldset { border: 0; padding: 0; margin: 0; }
+
+input[type="email"], input:not([type]), textarea {
+  width: 100%; padding: .75rem; font: inherit; color: inherit;
+  border: 1px solid var(--line); border-radius: .5rem; background: var(--card);
+}
+input:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 3px solid var(--accent); outline-offset: 2px;
+}
+
+button { font: inherit; cursor: pointer; }
+.button, button.primary {
+  display: inline-block; padding: .7rem 1rem; border-radius: .5rem; text-align: center;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  text-decoration: none; font-weight: 600;
+}
+.primary, button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+form > button.primary { width: 100%; margin-top: 1rem; padding: .9rem; font-size: 1.05rem; }
+.wide { display: block; width: 100%; margin: .5rem 0; padding: .9rem; text-align: left; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; }
+.danger { color: var(--danger); }
+.actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .75rem 0; }
+.quiet { display: flex; gap: 1.25rem; justify-content: center; margin-top: 1.5rem; }
+
+.choice {
+  display: flex; align-items: center; gap: .75rem; font-weight: 500;
+  padding: .85rem 1rem; margin: .5rem 0; background: var(--card);
+  border: 1px solid var(--line); border-radius: .5rem; cursor: pointer;
+}
+.choice input { width: 1.2rem; height: 1.2rem; accent-color: var(--accent); flex: none; }
+.choice:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+.trap { position: absolute; left: -9999px; }
+
+.pill { font-size: .8rem; font-weight: 600; padding: .15rem .6rem; border-radius: 1rem; }
+.pill.on { background: var(--accent-soft); color: var(--accent); }
+.pill.off { background: var(--warn-bg); color: #6b4a00; }
+
+.messages { list-style: none; padding: 0; margin: 0; }
+.messages li { display: grid; gap: .15rem; padding: .75rem 0; border-top: 1px solid var(--line); }
+
+.steps { padding-left: 1.25rem; color: var(--muted); }
+.steps li { margin: .5rem 0; }
+.steps strong { color: var(--ink); }
+
+.reply-box.got { border-color: var(--accent); background: var(--accent-soft); }
+
+/* The printable sticker sheet */
+.sheet { display: grid; gap: 1rem; margin-top: 1.5rem; }
+.sticker {
+  background: #fff; color: #000; border: 2px dashed #000; border-radius: .5rem;
+  padding: 1rem; text-align: center; max-width: 22rem; margin: 0 auto; width: 100%;
+}
+.sticker-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 .5rem; }
+.sticker-sub { font-weight: 600; margin: .5rem 0 0; }
+.sticker-foot { font-size: .7rem; margin: .25rem 0 0; overflow-wrap: anywhere; }
+.qr svg { display: block; width: 100%; height: auto; }
+
+@media print {
+  .noprint { display: none !important; }
+  body { background: #fff; }
+  main { max-width: none; padding: 0; }
+  .sheet { grid-template-columns: 1fr 1fr; margin: 0; }
+  .sticker { break-inside: avoid; max-width: 9cm; }
+}
+
+.card > .button { margin-top: .5rem; }

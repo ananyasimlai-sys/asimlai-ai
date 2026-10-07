@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>A QR sticker that lets people reach you about your car</h1>
+<p class="lead">Blocking someone in? Lights left on? Anyone can scan the sticker and message you. They never see your name, email or number.</p>
+
+<form class="card" method="post" action="{{ url_for('start') }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <label for="email">Your email address</label>
+  <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+  <button class="primary">Get my free sticker</button>
+  <p class="small">No password and no app. We email you a link.</p>
+</form>
+
+<ol class="steps">
+  <li><strong>Enter your email.</strong> That's the whole sign-up.</li>
+  <li><strong>Print your QR code</strong> and stick it inside your windscreen.</li>
+  <li><strong>Get messages by email</strong> and reply with one tap.</li>
+</ol>
+{% endblock %}
