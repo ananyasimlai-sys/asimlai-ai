@@ -12,8 +12,11 @@ import hmac
 import os
 import re
 import secrets
+import shutil
 import smtplib
 import sqlite3
+import tempfile
+import threading
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from functools import wraps
@@ -116,9 +119,36 @@ def ago(**kwargs):
     return stamp(datetime.now(timezone.utc) - timedelta(**kwargs))
 
 
+_copy_lock = threading.Lock()
+
+
+class SavedConnection(sqlite3.Connection):
+    """A database connection that also backs the data up after every change.
+
+    Hosts like Cloud Run only keep files that live on a mounted storage bucket, and SQLite
+    cannot work on such a bucket directly (it needs file locking, which buckets lack). So we
+    work on a normal local file and copy the whole thing to the bucket after each save.
+    """
+
+    def commit(self):
+        super().commit()
+        durable = current_app.config.get("DURABLE_COPY")
+        if not durable:
+            return
+        try:
+            with _copy_lock:
+                snapshot = current_app.config["DATABASE"] + ".snapshot"
+                target = sqlite3.connect(snapshot)
+                self.backup(target)  # a consistent copy, even if another request is writing
+                target.close()
+                shutil.copyfile(snapshot, durable)
+        except Exception:
+            current_app.logger.exception("Could not back up the database to %s", durable)
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(current_app.config["DATABASE"])
+        g.db = sqlite3.connect(current_app.config["DATABASE"], factory=SavedConnection)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
@@ -247,8 +277,31 @@ def create_app(test_config=None):
 
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    with sqlite3.connect(app.config["DATABASE"]) as db:
-        db.executescript(SCHEMA)
+    # On a host with bucket storage: work on a local file, keep DATABASE as the backup location.
+    app.config.setdefault("WORK_ON_LOCAL_COPY", env("WORK_ON_LOCAL_COPY") == "1")
+    app.config["DURABLE_COPY"] = ""
+    if app.config["WORK_ON_LOCAL_COPY"]:
+        durable = app.config["DATABASE"]
+        working = app.config.get("WORKING_DATABASE") or str(Path(tempfile.gettempdir()) / "carnote-working.sqlite3")
+        try:
+            if os.path.getsize(durable) > 0:
+                shutil.copyfile(durable, working)  # pick up where the last run left off
+        except OSError:
+            pass  # no backup yet: this is the first run
+        app.config.update(DATABASE=working, DURABLE_COPY=durable)
+
+    try:
+        with sqlite3.connect(app.config["DATABASE"]) as db:
+            db.executescript(SCHEMA)
+            db.execute("SELECT COUNT(*) FROM owners").fetchone()
+    except sqlite3.DatabaseError:
+        if not app.config["DURABLE_COPY"]:
+            raise
+        # The backup we restored is damaged. Set it aside and start clean rather than crash.
+        app.logger.error("Restored database was unreadable; starting with an empty one")
+        os.replace(app.config["DATABASE"], app.config["DATABASE"] + ".damaged")
+        with sqlite3.connect(app.config["DATABASE"]) as db:
+            db.executescript(SCHEMA)
 
     @app.teardown_appcontext
     def close_db(_error):

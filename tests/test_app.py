@@ -152,3 +152,48 @@ def test_bad_links_lead_nowhere(app):
     assert client.get("/c/NOSUCHCAR").status_code == 404
     assert client.get("/r/forged-token").status_code == 404
     assert client.get("/login/forged-token").status_code == 400
+
+
+def test_owner_can_add_a_second_car(app):
+    owner, _code = sign_up(app)
+    assert post(owner, "/cars", nickname="Blue Golf").status_code == 302
+    assert "Blue Golf" in owner.get("/dashboard").text
+
+
+def hosted_app(tmp_path):
+    """The app as it runs on a host: local working file, backed up to a 'bucket' folder."""
+    return create_app(
+        {
+            "TESTING": True,
+            "DATABASE": str(tmp_path / "bucket" / "carnote.sqlite3"),
+            "WORKING_DATABASE": str(tmp_path / "working.sqlite3"),
+            "WORK_ON_LOCAL_COPY": True,
+            "SECRET_KEY": "test-secret",
+            "SMTP_HOST": "",
+            "BASE_URL": "http://localhost",
+        }
+    )
+
+
+def test_data_survives_a_restart_on_a_host(tmp_path):
+    (tmp_path / "bucket").mkdir()
+    first = hosted_app(tmp_path)
+    _owner, code = sign_up(first)
+
+    (tmp_path / "working.sqlite3").unlink()  # the host throws the local file away on restart
+    second = hosted_app(tmp_path)
+    assert "Message this car" in second.test_client().get(f"/c/{code}").text
+
+
+def test_a_damaged_backup_does_not_stop_the_site(tmp_path):
+    (tmp_path / "bucket").mkdir()
+    (tmp_path / "bucket" / "carnote.sqlite3").write_text("this is not a database")
+    app = hosted_app(tmp_path)
+    _owner, code = sign_up(app)
+    assert app.test_client().get(f"/c/{code}").status_code == 200
+
+
+def test_site_keeps_working_if_the_backup_location_fails(tmp_path):
+    app = hosted_app(tmp_path)  # the 'bucket' folder does not exist, so every backup fails
+    _owner, code = sign_up(app)
+    assert app.test_client().get(f"/c/{code}").status_code == 200
