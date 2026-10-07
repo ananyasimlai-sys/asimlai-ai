@@ -115,3 +115,10 @@ form > button.primary { width: 100%; margin-top: 1rem; padding: .9rem; font-size
 }
 
 .card > .button { margin-top: .5rem; }
+
+/* Direct-email flow */
+.big { display: block; width: 100%; padding: 1rem; font-size: 1.1rem; }
+.copyrow { display: flex; gap: .5rem; align-items: flex-start; justify-content: space-between; }
+.copyrow p { margin: 0; overflow-wrap: anywhere; }
+.copyrow .button { padding: .35rem .7rem; font-size: .875rem; flex: none; }
+.heads-up { background: var(--warn-bg); border-radius: .5rem; padding: .75rem 1rem; }

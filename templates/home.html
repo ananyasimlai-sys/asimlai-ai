@@ -1,19 +1,31 @@
 {% extends "base.html" %}
 {% block main %}
-<h1>A QR sticker that lets people reach you about your car</h1>
-<p class="lead">Blocking someone in? Lights left on? Anyone can scan the sticker and message you. They never see your name, email or number.</p>
+<h1>A QR sticker that lets people email you about your car</h1>
+<p class="lead">Blocking someone in? Lights left on? Anyone can scan the sticker and email you from their own phone.</p>
 
 <form class="card" method="post" action="{{ url_for('start') }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-  <label for="email">Your email address</label>
+  <label for="email">Email address for messages about your car</label>
   <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-  <button class="primary">Get my free sticker</button>
-  <p class="small">No password and no app. We email you a link.</p>
+  <button class="primary">Make my sticker</button>
+  <p class="small">No account, no password, no app.</p>
+  <p class="heads-up small">People who send you a message will see this address, so you may prefer one you keep just for this.</p>
 </form>
 
+{% if mine %}
+<div class="card">
+  <h3>Stickers made on this device</h3>
+  <ul class="messages">
+    {% for sticker in mine %}
+    <li><a href="{{ url_for('manage', token=sticker.token) }}">Sticker {{ sticker.code }}</a><span class="small">{{ sticker.email }}</span></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 <ol class="steps">
-  <li><strong>Enter your email.</strong> That's the whole sign-up.</li>
+  <li><strong>Enter an email address.</strong> That's the whole sign-up.</li>
   <li><strong>Print your QR code</strong> and stick it inside your windscreen.</li>
-  <li><strong>Get messages by email</strong> and reply with one tap.</li>
+  <li><strong>People scan it and email you</strong> from their own email app. You reply like any other email.</li>
 </ol>
 {% endblock %}
