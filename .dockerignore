@@ -1,0 +1,6 @@
+.git
+instance
+docs
+tests
+.env
+__pycache__
