@@ -197,3 +197,20 @@ def test_site_keeps_working_if_the_backup_location_fails(tmp_path):
     app = hosted_app(tmp_path)  # the 'bucket' folder does not exist, so every backup fails
     _owner, code = sign_up(app)
     assert app.test_client().get(f"/c/{code}").status_code == 200
+
+
+def test_status_page_reports_how_the_site_is_running(tmp_path, app):
+    assert app.test_client().get("/status").json == {
+        "version": "4", "storage": "direct file", "last_backup": "not used", "email": "test mode"}
+    (tmp_path / "bucket").mkdir()
+    hosted = hosted_app(tmp_path)
+    sign_up(hosted)
+    report = hosted.test_client().get("/status").json
+    assert report["storage"] == "local copy, backed up" and report["last_backup"] == "ok"
+
+
+def test_setting_a_database_location_switches_on_local_copy_mode(tmp_path, monkeypatch):
+    (tmp_path / "bucket").mkdir()
+    monkeypatch.setenv("DATABASE", str(tmp_path / "bucket" / "carnote.sqlite3"))
+    hosted = create_app({"TESTING": True, "WORKING_DATABASE": str(tmp_path / "w.sqlite3"), "SECRET_KEY": "x", "SMTP_HOST": ""})
+    assert hosted.test_client().get("/status").json["storage"] == "local copy, backed up"

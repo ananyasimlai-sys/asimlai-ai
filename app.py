@@ -68,6 +68,8 @@ MAX_CARS = 5
 MAX_PER_SENDER_PER_HOUR = 3
 MAX_PER_CAR_PER_HOUR = 10
 
+VERSION = "4"  # shown at /status, so you can tell which version of the code is live
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owners (
     id INTEGER PRIMARY KEY,
@@ -142,7 +144,9 @@ class SavedConnection(sqlite3.Connection):
                 self.backup(target)  # a consistent copy, even if another request is writing
                 target.close()
                 shutil.copyfile(snapshot, durable)
-        except Exception:
+            current_app.config["LAST_BACKUP"] = "ok"
+        except Exception as error:
+            current_app.config["LAST_BACKUP"] = f"failed ({type(error).__name__})"
             current_app.logger.exception("Could not back up the database to %s", durable)
 
 
@@ -278,7 +282,10 @@ def create_app(test_config=None):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # On a host with bucket storage: work on a local file, keep DATABASE as the backup location.
-    app.config.setdefault("WORK_ON_LOCAL_COPY", env("WORK_ON_LOCAL_COPY") == "1")
+    # This is automatic whenever a host sets DATABASE (set WORK_ON_LOCAL_COPY=0 to turn it off).
+    wanted = env("WORK_ON_LOCAL_COPY", "1" if env("DATABASE") else "0") == "1"
+    app.config.setdefault("WORK_ON_LOCAL_COPY", wanted)
+    app.config["LAST_BACKUP"] = "none yet"
     app.config["DURABLE_COPY"] = ""
     if app.config["WORK_ON_LOCAL_COPY"]:
         durable = app.config["DATABASE"]
@@ -591,6 +598,16 @@ def create_app(test_config=None):
             abort(404)
         emails = get_db().execute("SELECT * FROM outbox ORDER BY id DESC LIMIT 20").fetchall()
         return render_template("outbox.html", emails=emails)
+
+    @app.get("/status")
+    def status():
+        """A quick health report. It shows no private details."""
+        return jsonify(
+            version=VERSION,
+            storage="local copy, backed up" if app.config["DURABLE_COPY"] else "direct file",
+            last_backup=app.config["LAST_BACKUP"] if app.config["DURABLE_COPY"] else "not used",
+            email="test mode" if app.config["DEV_OUTBOX"] else "sending",
+        )
 
     @app.errorhandler(404)
     def not_found(_error):
