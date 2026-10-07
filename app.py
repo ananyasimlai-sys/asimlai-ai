@@ -68,7 +68,9 @@ MAX_CARS = 5
 MAX_PER_SENDER_PER_HOUR = 3
 MAX_PER_CAR_PER_HOUR = 10
 
-VERSION = "5"  # shown at /status, so you can tell which version of the code is live
+VERSION = "6"  # shown at /status, so you can tell which version of the code is live
+STARTED = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")  # when this server copy started
+SERVER_ID = secrets.token_hex(3)  # differs between server copies, to spot when more than one is running
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owners (
@@ -477,9 +479,9 @@ def create_app(test_config=None):
     # ----- scanner: send a message, wait for a reply -----
 
     def find_car(code):
-        car = get_db().execute("SELECT * FROM cars WHERE code = ?", (code.upper(),)).fetchone()
+        car = get_db().execute("SELECT * FROM cars WHERE code = ?", (code.strip().upper(),)).fetchone()
         if car is None:
-            abort(404)
+            abort(404, description="unknown sticker")
         return car
 
     @app.get("/c/<code>")
@@ -607,7 +609,13 @@ def create_app(test_config=None):
     @app.get("/status")
     def status():
         """A quick health report. It shows no private details."""
+        db = get_db()
         return jsonify(
+            started=STARTED,
+            server=SERVER_ID,
+            owners=db.execute("SELECT COUNT(*) FROM owners").fetchone()[0],
+            cars=db.execute("SELECT COUNT(*) FROM cars").fetchone()[0],
+            base_url=app.config["BASE_URL"] or "not set",
             version=VERSION,
             storage="local copy, backed up" if app.config["DURABLE_COPY"] else "direct file",
             last_backup=app.config["LAST_BACKUP"] if app.config["DURABLE_COPY"] else "not used",
@@ -615,7 +623,14 @@ def create_app(test_config=None):
         )
 
     @app.errorhandler(404)
-    def not_found(_error):
+    def not_found(error):
+        if error.description == "unknown sticker":
+            return notice(
+                "Sticker not recognised",
+                "The link is fine, but this sticker's code isn't in our records. "
+                "It may have been removed, or the site's data may have been reset since it was printed.",
+                404,
+            )
         return notice("Page not found", "This link doesn't lead anywhere. If you scanned a sticker, it may have been retired.", 404)
 
     return app

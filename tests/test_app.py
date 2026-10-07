@@ -200,13 +200,18 @@ def test_site_keeps_working_if_the_backup_location_fails(tmp_path):
 
 
 def test_status_page_reports_how_the_site_is_running(tmp_path, app):
-    assert app.test_client().get("/status").json == {
-        "version": "5", "storage": "direct file", "last_backup": "not used", "email": "test mode"}
+    report = app.test_client().get("/status").json
+    assert (report["version"], report["storage"], report["email"], report["cars"]) == ("6", "direct file", "test mode", 0)
     (tmp_path / "bucket").mkdir()
     hosted = hosted_app(tmp_path)
     sign_up(hosted)
     report = hosted.test_client().get("/status").json
-    assert report["storage"] == "local copy, backed up" and report["last_backup"] == "ok"
+    assert (report["storage"], report["last_backup"], report["owners"], report["cars"]) == ("local copy, backed up", "ok", 1, 1)
+
+
+def test_unknown_sticker_gets_its_own_message(app):
+    assert "Sticker not recognised" in app.test_client().get("/c/ABCD2345").text
+    assert "Page not found" in app.test_client().get("/nowhere").text
 
 
 def test_setting_a_database_location_switches_on_local_copy_mode(tmp_path, monkeypatch):
