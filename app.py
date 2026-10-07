@@ -68,7 +68,7 @@ MAX_CARS = 5
 MAX_PER_SENDER_PER_HOUR = 3
 MAX_PER_CAR_PER_HOUR = 10
 
-VERSION = "4"  # shown at /status, so you can tell which version of the code is live
+VERSION = "5"  # shown at /status, so you can tell which version of the code is live
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS owners (
@@ -221,7 +221,7 @@ def send_email(recipient, subject, body):
 
 def create_car(owner_id, nickname):
     db = get_db()
-    while True:
+    for _attempt in range(5):
         try:
             db.execute(
                 "INSERT INTO cars (owner_id, code, nickname, created_at) VALUES (?, ?, ?, ?)",
@@ -230,13 +230,18 @@ def create_car(owner_id, nickname):
             db.commit()
             return
         except sqlite3.IntegrityError:
-            continue  # code already taken (astronomically unlikely), pick another
+            db.rollback()  # code already taken (astronomically unlikely): let go and pick another
+    raise RuntimeError("Could not create a car")
 
 
 def login_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not session.get("owner_id"):
+        owner_id = session.get("owner_id")
+        known = owner_id and get_db().execute("SELECT 1 FROM owners WHERE id = ?", (owner_id,)).fetchone()
+        if not known:
+            # Not signed in, or signed in to an account that no longer exists (e.g. data was reset).
+            session.pop("owner_id", None)
             return redirect(url_for("home"))
         return view(*args, **kwargs)
 

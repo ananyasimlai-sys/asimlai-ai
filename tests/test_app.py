@@ -201,7 +201,7 @@ def test_site_keeps_working_if_the_backup_location_fails(tmp_path):
 
 def test_status_page_reports_how_the_site_is_running(tmp_path, app):
     assert app.test_client().get("/status").json == {
-        "version": "4", "storage": "direct file", "last_backup": "not used", "email": "test mode"}
+        "version": "5", "storage": "direct file", "last_backup": "not used", "email": "test mode"}
     (tmp_path / "bucket").mkdir()
     hosted = hosted_app(tmp_path)
     sign_up(hosted)
@@ -214,3 +214,15 @@ def test_setting_a_database_location_switches_on_local_copy_mode(tmp_path, monke
     monkeypatch.setenv("DATABASE", str(tmp_path / "bucket" / "carnote.sqlite3"))
     hosted = create_app({"TESTING": True, "WORKING_DATABASE": str(tmp_path / "w.sqlite3"), "SECRET_KEY": "x", "SMTP_HOST": ""})
     assert hosted.test_client().get("/status").json["storage"] == "local copy, backed up"
+
+
+def test_stale_sign_in_after_a_data_reset_is_sent_home_not_stuck(app):
+    """Regression: this used to hang the server and lock the database for everyone."""
+    owner, _code = sign_up(app)
+    with sqlite3.connect(app.config["DATABASE"]) as db:  # the host restarted with empty data
+        db.executescript("DELETE FROM cars; DELETE FROM owners;")
+    token = csrf(owner)
+    assert owner.post("/cars", data={"csrf": token, "nickname": "Blue Golf"}).headers["Location"] == "/"
+    assert "Get my free sticker" in owner.get("/", follow_redirects=True).text
+    _other, other_code = sign_up(app, "other@example.com")  # everyone else carries on unaffected
+    assert app.test_client().get(f"/c/{other_code}").status_code == 200
