@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sticker for {{ car.nickname }} · {{ app_name }}{% endblock %}
+{% block main %}
+<div class="noprint">
+  <h1>Sticker for {{ car.nickname }}</h1>
+  <p>Print this page, cut out both stickers, and tape them <strong>inside</strong> the glass facing out: one at the front, one at the back. Use a lower corner, out of the driver's line of sight.</p>
+  <div class="actions">
+    <button class="button primary" onclick="window.print()">Print</button>
+    <a class="button" href="{{ url_for('dashboard') }}">Back</a>
+  </div>
+</div>
+
+<div class="sheet">
+  {% for copy in ['Front', 'Back'] %}
+  <div class="sticker">
+    <p class="sticker-title">Need to reach the owner of this car?</p>
+    <div class="qr">{{ qr }}</div>
+    <p class="sticker-sub">Scan with your phone camera to send a message</p>
+    <p class="sticker-foot">No app needed · {{ link }}</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

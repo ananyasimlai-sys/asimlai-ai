@@ -1,28 +1,28 @@
 # CarNote
 
-A QR sticker for your car. Anyone who needs to reach you (you're blocking them in, your lights are on) scans it, picks a message, and sends it to you from their own email app. You reply like any other email.
+A QR sticker for your car. Anyone who needs to reach you (you're blocking them in, your lights are on) scans it and sends a message. You get it by email and reply with one tap. Neither side learns who the other is.
 
-No app to install, no account, no password. The site never sends an email itself, so there is no mail server to set up or pay for.
+No app to install, no password, and the scanner needs no account at all.
 
-| Owner gets a sticker | Scanner picks a message | Their email app does the sending |
+| Scanner sends a message | Owner replies from the email | Printable sticker |
 |---|---|---|
-| ![Sticker page](docs/2-sticker.png) | ![Scan page](docs/3-scan.png) | ![Send page](docs/4-send.png) |
+| ![Scan page](docs/3-scan.png) | ![Reply page](docs/4-reply.png) | ![Sticker](docs/2-sticker.png) |
 
 ## How it works
 
-1. **The owner types in an email address** and gets a printable QR sticker straight away.
-2. **Each sticker has a random code**, such as `Z4A7WM5K`. The QR code holds only that code, never the email address.
-3. **A scanner picks a ready-made message** and can add a short note.
-4. **Their own email app opens** with the message addressed to the owner. If no app opens, they can copy the address and text instead.
+1. **Owner signs up with an email address.** We email a sign-in link. There is no password.
+2. **Each car gets a random code**, such as `Z4A7WM5K`, printed as a QR code. The code contains nothing about the owner.
+3. **A scanner picks a ready-made message** and can add a short note. We email it to the owner.
+4. **The owner taps a ready-made reply.** It appears on the page the scanner still has open.
 
-The owner gets a private "manage" link for printing, pausing or deleting the sticker. There is no login: whoever has that link controls the sticker.
+## Privacy and abuse protection
 
-## Privacy: what each side sees
-
-- **The scanner sees the owner's email address**, and **the owner sees the scanner's**, because it is an ordinary email between them. Owners are told this when they sign up and may want an address kept just for this.
-- The address is not on the page a scan opens. It appears only after the scanner writes a message, and that step is rate limited (5 times an hour per device, 30 per car), which makes addresses harder to harvest.
-- Pausing a sticker hides the address. Deleting it removes the address from the database.
-- The site stores the owner's email address and nothing else personal. It never sees the messages. Devices are told apart by a scrambled fingerprint, so no IP addresses are stored.
+- The scanner never sees the owner's email address or the car's nickname.
+- The only personal data stored is the owner's email address. No number plates, phone numbers or locations.
+- Devices are told apart by a scrambled fingerprint, so no IP addresses are stored.
+- One device can send 3 messages an hour to a car, and a car receives at most 10 an hour.
+- Links are not allowed in notes, which blocks the obvious phishing trick.
+- The owner can report a message (which blocks that device) or pause the sticker, straight from the email.
 
 ## Run it on your computer
 
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 flask --app app run --debug
 ```
 
-Open http://127.0.0.1:5000.
+Open http://127.0.0.1:5000. With no mail server set up, the app runs in **test mode**: emails are saved and shown at `/dev/outbox` instead of being sent, so you can try the whole flow alone.
 
 ## Run the tests
 
@@ -47,13 +47,13 @@ Copy `.env.example` to `.env` (or set the same values in your hosting dashboard)
 | Setting | What it is |
 |---|---|
 | `BASE_URL` | The site's public address. It is baked into every QR code, so set it before printing stickers. |
-| `SECRET_KEY` | A long random string. |
+| `SECRET_KEY` | A long random string that signs the email links. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | Your email provider's sending details. Setting `SMTP_HOST` switches test mode off. |
 | `TRUST_PROXY` | Set to `1` on hosting platforms, so rate limits see real visitor addresses. |
-| `DATABASE` | Optional. Where to keep the data file. |
 
-Start it with `gunicorn "app:create_app()"`, or use the included `Dockerfile`.
+Start it with `gunicorn "app:create_app()"`.
 
-The data lives in one SQLite file (`instance/carnote.sqlite3` by default), so the host needs a disk that survives restarts.
+The data lives in one SQLite file (`instance/carnote.sqlite3`), so the host needs a disk that survives restarts.
 
 ## Project layout
 
@@ -66,7 +66,6 @@ tests/test_app.py   automated tests
 
 ## Known limits of this prototype
 
-- Email addresses are not verified, so a typo means messages go to the wrong person.
-- A lost manage link cannot be recovered (the browser that made the sticker remembers it; otherwise make a new sticker).
-- Email can be slow for urgent cases such as a blocked car.
-- A scanner with no email app set up on their phone has to copy the address by hand.
+- Email can be slow for urgent cases. Text or WhatsApp alerts are the obvious next step.
+- Replies are ready-made only. The scanner must keep the page open to see one.
+- Stickers are print-at-home. Weatherproof printed stickers would come later.

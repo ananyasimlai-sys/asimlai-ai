@@ -8,9 +8,9 @@
 </div>
 {% else %}
 <h1>Message this car's owner</h1>
-<p class="lead">Pick a message and we'll open your email app with it ready to send.</p>
+<p class="lead">Your message goes to them by email. Neither of you sees who the other is.</p>
 
-<form method="post" action="{{ url_for('compose', code=car.code) }}">
+<form method="post" action="{{ url_for('send_message', code=car.code) }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
   <fieldset>
     <legend>What do you want to tell them?</legend>
@@ -29,8 +29,7 @@
     <label>Leave this empty <input name="website" tabindex="-1" autocomplete="off"></label>
   </div>
 
-  <button class="primary">Continue to my email</button>
-  <p class="small">The message is sent from your own email, so the owner will see your email address.</p>
+  <button class="primary">Send message</button>
 </form>
 {% endif %}
 {% endblock %}

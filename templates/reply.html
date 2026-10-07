@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Reply · {{ app_name }}{% endblock %}
+{% block main %}
+<h1>Message about {{ m.nickname }}</h1>
+
+<div class="card">
+  <p><strong>{{ REASONS[m.reason] }}</strong></p>
+  {% if m.note %}<p class="note">“{{ m.note }}”</p>{% endif %}
+  <p class="small">Sent {{ m.created_at|when }}</p>
+</div>
+
+{% if m.reported %}
+<p class="flash">You reported this message. That device can no longer message this car.</p>
+{% elif m.reply %}
+<div class="card reply-box got">
+  <p class="small">You replied</p>
+  <p><strong>{{ REPLIES[m.reply] }}</strong></p>
+</div>
+{% else %}
+<form method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <fieldset>
+    <legend>Tap a reply. They won't see who you are.</legend>
+    {% for key, label in REPLIES.items() %}
+    <button class="button wide" name="reply" value="{{ key }}">{{ label }}</button>
+    {% endfor %}
+  </fieldset>
+</form>
+{% endif %}
+
+<form class="quiet" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  {% if not m.reported %}<button class="link danger" name="action" value="report">Report this message</button>{% endif %}
+  {% if m.paused %}<span class="small">This sticker is paused.</span>
+  {% else %}<button class="link" name="action" value="pause">Pause my sticker</button>{% endif %}
+</form>
+{% endblock %}
