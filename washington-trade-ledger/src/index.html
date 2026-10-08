@@ -267,6 +267,15 @@ th[aria-sort] .thb{color:var(--ink)}
   .bs .bar{height:8px}
 }
 .bs-more{align-self:flex-start;margin-top:6px}
+/* top 10 stocks panel */
+.t10-ctl{display:flex;flex-wrap:wrap;gap:10px 22px;align-items:center}
+.t10-ctl .fgroup{flex-wrap:wrap}
+.t10-body{display:flex;flex-direction:column;gap:10px}
+.t10-sum{font-size:14px;color:var(--ink-2)}
+.t10-sum b{color:var(--ink);font-weight:600}
+.t10 .bs-n{display:grid;grid-template-columns:1.9em minmax(0,1fr);align-items:baseline}
+.rk{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.seg button:disabled{opacity:.45;cursor:not-allowed}
 .fine{font-size:12.5px;color:var(--muted);max-width:90ch}
 
 /* person quick view */
@@ -802,6 +811,97 @@ async function savePdf(day, msg) {
 function vhead(title, sub, crumb) { return el("div", { class: "vhead" }, crumb || null, el("h1", { text: title }), sub ? el("p", { class: "sub" }, sub) : null); }
 const sectHead = (title, sub, more) => el("div", { class: "sect-h" }, el("div", null, el("h2", { text: title }), sub ? el("p", { text: sub }) : null), more || null);
 
+// ───────────────────────────────────────────────────────── top 10 stocks bought and sold, by quarter
+const betweenCache = new Map();
+function rowsBetween(from, to, group = S.group) {        // trades made on days from..to (inclusive)
+  const key = from + "|" + to + "|" + group;
+  if (betweenCache.has(key)) return betweenCache.get(key);
+  const gi = group === "all" ? -1 : GI[group], out = [];
+  for (let i = 0; i < D.n; i++) {                          // rows are sorted newest trade first
+    const d = D.d[i];
+    if (d > to) continue;
+    if (d < from) break;
+    if (gi < 0 || D.g[i] === gi) out.push(i);
+  }
+  betweenCache.set(key, out);
+  return out;
+}
+function quarterWindows() {                                // the last 12 months, then four full quarters and the current one
+  if (D._quarters) return D._quarters;
+  const t = dt(D.today), y0 = t.getUTCFullYear(), q0 = Math.floor(t.getUTCMonth() / 3), dayOf = (y, m) => Math.round((Date.UTC(y, m, 1) - BASE) / 864e5);
+  const out = [{ key: "12m", label: "Last 12 months", title: fd(Math.max(D.start, D.today - 365)) + " to " + fd(D.today), from: Math.max(D.start, D.today - 365), to: D.today }];
+  for (let k = 4; k >= 0; k--) {
+    let y = y0, q = q0 - k; while (q < 0) { q += 4; y--; }
+    const from = dayOf(y, q * 3), end = dayOf(y, q * 3 + 3) - 1;
+    if (end < D.start) continue;
+    out.push({ key: y + "Q" + (q + 1), label: "Q" + (q + 1) + " " + y, title: fd(Math.max(from, D.start)) + " to " + fd(Math.min(end, D.today)),
+      from: Math.max(from, D.start), to: Math.min(end, D.today), partial: end > D.today });
+  }
+  return (D._quarters = out);
+}
+const lastName = p => { const w = p.name.replace(/,/g, "").split(" ").filter(x => !/^(Jr\.?|Sr\.?|II|III|IV)$/.test(x)); return w[w.length - 1] || p.name; };
+function topTen() {
+  const st = S.ui.top10 || (S.ui.top10 = { w: "12m", rank: "value" });
+  const wins = quarterWindows();
+  if (!wins.some(w => w.key === st.w)) st.w = "12m";
+  const senOK = S.group === "all" || S.group === "senate";
+  const body = el("div", { class: "t10-body" });
+  const segOf = (labelId, items, key) => el("div", { class: "seg", role: "group", "aria-labelledby": labelId }, items.map(it => el("button", {
+    type: "button", "aria-pressed": String(st[key] === it.key), title: it.title || null, disabled: it.off || null,
+    onclick: ev => { if (st[key] === it.key) return; st[key] = it.key; ev.currentTarget.parentNode.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === ev.currentTarget))); draw(); } }, it.label)));
+  const draw = () => {
+    const w = wins.find(x => x.key === st.w), rank = senOK ? st.rank : "value";
+    const rows = rowsBetween(w.from, w.to).filter(i => D.cls[i] === 0), tot = total(rows);
+    const by = new Map();
+    for (const i of rows) {
+      const s = D.side[i]; if (s > 1) continue;
+      let e = by.get(D.a[i]); if (!e) by.set(D.a[i], e = { a: D.assets[D.a[i]], t: [newTally(), newTally()], sen: [newTally(), newTally()], pv: [new Map(), new Map()] });
+      add(e.t[s], i); e.pv[s].set(D.p[i], (e.pv[s].get(D.p[i]) || 0) + BMID[D.b[i]]);
+      if (D.g[i] === 1) add(e.sen[s], i);
+    }
+    const all = Array.from(by.values()), senTot = total(rows.filter(i => D.g[i] === 1));
+    const pick = side => {
+      const n = t => side ? t.ns : t.nb, v = t => side ? t.vs : t.vb, ppl = t => side ? t.ps : t.pb;
+      const list = rank === "value"
+        ? all.filter(e => n(e.t[side]) > 0).sort((x, y) => (v(y.t[side]) - v(x.t[side])) || (n(y.t[side]) - n(x.t[side])))
+        : all.filter(e => n(e.sen[side]) > 0).sort((x, y) => (ppl(y.sen[side]).size - ppl(x.sen[side]).size) || (v(y.sen[side]) - v(x.sen[side])) || (n(y.sen[side]) - n(x.sen[side])));
+      return list.slice(0, 10).map(e => ({ e, side, m: rank === "value" ? v(e.t[side]) : ppl(e.sen[side]).size }));
+    };
+    const lists = [pick(0), pick(1)], max = Math.max(1e-9, ...lists.flat().map(x => x.m));
+    const item = (x, k) => {
+      const a = x.e.a, s = x.side, t = x.e.t[s], sen = x.e.sen[s], senSet = s ? sen.ps : sen.pb, nT = s ? t.ns : t.nb, ppl = (s ? t.ps : t.pb).size;
+      // who traded it, biggest amount first: everyone in value mode when three or fewer, senators in senator mode
+      const who = Array.from(x.e.pv[s]).filter(([pi]) => rank === "value" || D.people[pi].group === "senate").sort((p1, p2) => p2[1] - p1[1]).map(([pi]) => lastName(D.people[pi]));
+      const names = who.length <= 3 ? who.join(", ") : who.slice(0, 2).join(", ") + " and " + (who.length - 2) + " more";
+      const facts = rank === "value"
+        ? [plural(nT, "trade"), ppl <= 3 ? names : plural(ppl, "person", "people"), ppl > 3 && senOK && senSet.size ? plural(senSet.size, "senator") : null]
+        : [names, plural(s ? sen.ns : sen.nb, "trade"), rangeOf(sen, s)];
+      return el("li", { class: "bs-i" },
+        el("div", { class: "bs-n" }, el("span", { class: "rk", text: String(k + 1) }), el("div", null, a.ticker ? el("a", { href: "#s-" + a.ticker, text: a.name }) : a.name,
+          el("small", null, a.ticker ? el("span", { class: "tk", text: a.ticker }) : null, (a.ticker ? " · " : "") + facts.filter(Boolean).join(" · ")))),
+        el("div", { class: "bs-b" }, el("span", { class: "bar " + (s ? "sell" : "buy"), style: "--w:" + (x.m / max).toFixed(4) })),
+        el("span", { class: "val" }, rank === "value" ? rangeOf(t, s) : plural(senSet.size, "senator"), rank === "value" ? el("span", { class: "sr", text: ", estimated " + fm(x.m) }) : null));
+    };
+    const col = side => el("div", { class: "bs-c" }, el("h3", null, el("i", { class: "sw " + (side ? "sell" : "buy") }), side ? "Most sold" : "Most bought"),
+      lists[side].length ? el("ol", { class: "bs-l t10" }, lists[side].map(item))
+        : el("p", { class: "empty", text: (rank === "value" ? (side ? "No stock sales" : "No stock purchases") : (side ? "No senator sold a stock" : "No senator bought a stock")) + " in " + (w.key === "12m" ? "the last 12 months" : w.label) + (w.partial ? " so far" : "") + "." }));
+    body.replaceChildren(...[
+      el("p", { class: "t10-sum" }, el("b", { text: w.key === "12m" ? "Last 12 months" : w.label + (w.partial ? " so far" : "") }), " (" + w.title + "): ",
+        tot.n ? plural(tot.n, "stock trade") + " by " + plural(tot.pa.size, "person", "people") + (senOK ? ", " + plural(senTot.pa.size, "senator") + " among them" : "") + ". Bought " + rangeOf(tot, 0) + ", sold " + rangeOf(tot, 1) + "." : "no stock trades disclosed yet."),
+      w.to > D.today - 45 ? el("p", { class: "fine", text: "Trades from the last 45 days are still being reported, so this period will fill in." }) : null,
+      rank === "senators" ? el("p", { class: "fine", text: "Senators trade far less often than the House or the President, so most stocks have one or two senators behind them; ties go to the larger amount. Names are the senators who traded." }) : null,
+      el("div", { class: "bs" }, col(0), col(1))].filter(Boolean));
+  };
+  const ctl = el("div", { class: "t10-ctl" },
+    el("div", { class: "fgroup" }, el("span", { class: "flabel", id: "t10-w", text: "Trades made in" }), segOf("t10-w", wins, "w")),
+    el("div", { class: "fgroup" }, el("span", { class: "flabel", id: "t10-r", text: "Rank by" }), segOf("t10-r", [{ key: "value", label: "Value" }, { key: "senators", label: "Number of senators", off: !senOK, title: senOK ? null : "No senators in view: choose Everyone or Senate under Filed by" }], "rank")));
+  if (!senOK) ctl.querySelectorAll('[aria-labelledby="t10-r"] button').forEach((b, j) => b.setAttribute("aria-pressed", String(j === 0)));
+  draw();
+  return el("section", { class: "sect", id: "top10" },
+    sectHead("Top 10 stocks bought and sold", "Individual company shares only. Ranked by estimated value, or by how many senators traded each stock" + (S.group === "all" ? "" : " · " + GROUPS[S.group] + " only") + ". This panel has its own period, set below."),
+    el("div", { class: "fig" }, ctl, body));
+}
+
 function vOverview(root) {
   const rows = slice(), tot = total(rows), valueMode = S.measure === "value";
   root.append(vhead("What Washington is buying and selling", [el("b", { text: plural(tot.n, "trade") }), " by ", el("b", { text: plural(tot.pa.size, "person", "people") }), ", made " + periodWords() + (S.group === "all" ? "." : " · " + GROUPS[S.group] + " only.")]));
@@ -819,6 +919,7 @@ function vOverview(root) {
     const p = D.people[topP[0]];
     root.append(el("p", { class: "note" }, el("b", { text: p.name + " accounts for " + Math.round(topP[1].n / tot.n * 100) + "% of the trades in this view" }), " (" + fi(topP[1].n) + " of " + fi(tot.n) + "). Stock rankings by count use the number of people trading, so one busy account does not decide them. ", el("a", { href: "#p-" + p.id, text: "See " + p.name + "'s trades" }), "."));
   }
+  root.append(topTen());
   root.append(timeFigure(rows, "Bought and sold over time"));
 
   // stocks

@@ -34,6 +34,17 @@ const ok = (cond, msg) => { (cond ? out : fail).push((cond ? 'ok   ' : 'FAIL ') 
     ok(await p.title() === 'Washington Trade Ledger', T + 'title');
     await overflow('overview');
     await shot('overview');
+    // top 10 stocks bought and sold: last 12 months by default, one button per quarter, ranked by value or by senators
+    const t10 = await p.evaluate(() => { const s = document.querySelector('#top10'); return s && { wins: s.querySelectorAll('[aria-labelledby="t10-w"] button').length, b: s.querySelectorAll('.bs-c')[0].querySelectorAll('.bs-i').length, sd: s.querySelectorAll('.bs-c')[1].querySelectorAll('.bs-i').length, pressed: s.querySelector('[aria-labelledby="t10-w"] button[aria-pressed="true"]').textContent }; });
+    ok(t10 && t10.wins === 6 && t10.b === 10 && t10.sd === 10 && t10.pressed === 'Last 12 months', T + 'top 10 panel ' + JSON.stringify(t10));
+    await p.click('#top10 [aria-labelledby="t10-w"] button:text("Q1 2026")'); await p.waitForTimeout(100);
+    await p.click('#top10 [aria-labelledby="t10-r"] button:text("Number of senators")'); await p.waitForTimeout(100);
+    const t10b = await p.evaluate(() => ({ sum: document.querySelector('#top10 .t10-sum').textContent, first: (document.querySelector('#top10 .bs-c .val') || {}).textContent, n: document.querySelectorAll('#top10 .bs-i').length }));
+    ok(/^Q1 2026/.test(t10b.sum) && /senator/.test(t10b.first || '') && t10b.n > 0, T + 'quarter and senator ranking ' + JSON.stringify(t10b));
+    await shot('top10', { fullPage: false });
+    await p.click('#f-group-house'); await p.waitForTimeout(250);
+    ok(await p.$eval('#top10 [aria-labelledby="t10-r"] button:nth-child(2)', b => b.disabled), T + 'senator ranking switched off for House only');
+    await p.click('#f-group-all'); await p.waitForTimeout(250);
     // scope chips under the search box
     const scopes = await p.$$eval('#q-scopes .chip', a => a.map(x => [x.textContent, x.getAttribute('aria-pressed')]));
     ok(scopes.length === 5 && scopes[0][1] === 'true', T + 'scope chips ' + JSON.stringify(scopes));

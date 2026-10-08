@@ -5,12 +5,15 @@ Stock trades disclosed by members of Congress, the President and senior executiv
 **Live site:** https://ananyasimlai-sys.github.io/asimlai-ai/washington-trade-ledger/
 (it appears once GitHub Pages is switched on; see [Publishing](#publishing-one-time-setup))
 
-| Overview | What one person bought and sold | Search chips |
-|---|---|---|
-| ![Overview](docs/overview.png) | ![Quick view](docs/quick-view.png) | ![Search](docs/search.png) |
+| Overview | Top 10 stocks, by quarter |
+|---|---|
+| ![Overview](docs/overview.png) | ![Top 10 stocks bought and sold](docs/top10.png) |
+| **What one person bought and sold** | **Search chips** |
+| ![Quick view](docs/quick-view.png) | ![Search](docs/search.png) |
 
 ## What's on the site
 
+- **Top 10 stocks bought and sold**: at the top of the Overview, the ten stocks most bought and the ten most sold in the last 12 months or in any single quarter, ranked by estimated value or by how many senators traded them, with who traded each one.
 - **Overview**: trades bought and sold over time, the most traded stocks, stocks with more buyers than sellers (and the reverse), the most active people, the latest disclosures, and breakdowns by sector, asset type, trade size, owner, party and branch.
 - **Most active people**: select a name to open a clean view of what that person bought and what they sold, ranked by size, with the disclosed amounts and number of trades.
 - **People, Stocks, Trades**: sortable lists. Every trade can be searched, filtered and downloaded as CSV. Each person and stock has its own page.
