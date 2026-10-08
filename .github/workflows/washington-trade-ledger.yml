@@ -1,5 +1,6 @@
 # Rebuilds the Washington Trade Ledger from the public filings every day and publishes it with GitHub Pages.
 # One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+# Until that is done, each run stops after the first job with a note saying the site is not published yet.
 name: Washington Trade Ledger
 
 on:
@@ -22,7 +23,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.pages.outputs.on }}
+    steps:
+      - name: Check that GitHub Pages publishes from GitHub Actions
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type 2>/dev/null || true)
+          if [ "$source" = "workflow" ]; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is set to publish from GitHub Actions."
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Site not published yet::Open Settings > Pages and set Source to GitHub Actions, then run this workflow again (Actions > Washington Trade Ledger > Run workflow)."
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -32,13 +54,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check that GitHub Pages is switched on
-        id: pages
+      - name: Look up the site address
+        id: site
         uses: actions/configure-pages@v5
 
       - name: Fetch the data that is live now, for the regression check
         env:
-          LIVE: ${{ steps.pages.outputs.base_url }}/washington-trade-ledger/data/core.json
+          LIVE: ${{ steps.site.outputs.base_url }}/washington-trade-ledger/data/core.json
         run: |
           if curl -sSfL --max-time 60 "$LIVE" -o "$RUNNER_TEMP/prev-core.json"; then
             echo "Comparing with the live site: $LIVE"

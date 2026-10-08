@@ -44,7 +44,7 @@ GitHub pauses scheduled workflows in public repositories after 60 days without a
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 3. Open **Actions → Washington Trade Ledger → Run workflow** (or wait for the next daily run).
 
-The site is then live at the address above.
+The site is then live at the address above. Until step 2 is done, each run stops early with a note saying the site is not published yet; nothing fails.
 
 ## Sources
 
