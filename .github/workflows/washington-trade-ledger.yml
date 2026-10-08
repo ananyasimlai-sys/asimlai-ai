@@ -1,0 +1,106 @@
+# Rebuilds the Washington Trade Ledger from the public filings every day and publishes it with GitHub Pages.
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+# Until that is done, each run stops after the first job with a note saying the site is not published yet.
+name: Washington Trade Ledger
+
+on:
+  schedule:
+    - cron: "20 14 * * *"        # every day at 14:20 UTC
+  workflow_dispatch:              # Actions tab -> Run workflow
+  push:
+    branches: [main]
+    paths:
+      - "washington-trade-ledger/**"
+      - ".github/workflows/washington-trade-ledger.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      pages: ${{ steps.pages.outputs.on }}
+    steps:
+      - name: Check that GitHub Pages publishes from GitHub Actions
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .build_type 2>/dev/null || true)
+          if [ "$source" = "workflow" ]; then
+            echo "on=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is set to publish from GitHub Actions."
+          else
+            echo "on=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Site not published yet::Open Settings > Pages and set Source to GitHub Actions, then run this workflow again (Actions > Washington Trade Ledger > Run workflow)."
+          fi
+
+  build:
+    needs: check
+    if: needs.check.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Look up the site address
+        id: site
+        uses: actions/configure-pages@v5
+
+      - name: Fetch the data that is live now, for the regression check
+        env:
+          LIVE: ${{ steps.site.outputs.base_url }}/washington-trade-ledger/data/core.json
+        run: |
+          if curl -sSfL --max-time 60 "$LIVE" -o "$RUNNER_TEMP/prev-core.json"; then
+            echo "Comparing with the live site: $LIVE"
+          else
+            cp washington-trade-ledger/data/core.json "$RUNNER_TEMP/prev-core.json"
+            echo "No live site yet; comparing with the snapshot in the repository"
+          fi
+
+      - name: Rebuild the ledger from the public sources
+        run: |
+          python3 -I washington-trade-ledger/pipeline/build.py \
+            --work "$RUNNER_TEMP/work" --out "$RUNNER_TEMP/out" --prev "$RUNNER_TEMP/prev-core.json"
+
+      - name: Keep the build report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-report
+          path: ${{ runner.temp }}/out/build-report.json
+          if-no-files-found: ignore
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/washington-trade-ledger/data
+          cp washington-trade-ledger/index.html _site/washington-trade-ledger/
+          cp "$RUNNER_TEMP"/out/data/core.json "$RUNNER_TEMP"/out/data/trades.json "$RUNNER_TEMP"/out/data/prices.json _site/washington-trade-ledger/data/
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Washington Trade Ledger</title><meta http-equiv="refresh" content="0; url=washington-trade-ledger/"><a href="washington-trade-ledger/">Washington Trade Ledger</a>' > _site/index.html
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}washington-trade-ledger/
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
